@@ -57,8 +57,28 @@ python3 job_hunter.py push-base --input out/jobs.json --base-token XXX --table-i
 |---|---|---|
 | 官网/ATS | ✅ 主力 | 飞书招聘/北森 ATS 为 JS 渲染,Firecrawl `wait` 动作可破;宇树一站抓到 26 个岗位 |
 | 猎聘 | ✅ 最稳 | 公司页 → `company-jobs/{id}` 列表,含**薪资/城市/经验/日期**;阶跃星辰 37 个、商汤页标 199 |
-| BOSS直聘 | ⚠️ 半通 | 企业页部分可抓(月之暗面 5 个),常遇风控只给框架 |
-| 拉勾 | ❌ 基本不通 | 滑块验证拦截,降级为搜索结果摘要 |
+| BOSS直聘 | ✅ 登录态(CDP) | 见下「CDP 登录浏览器模式」;商汤实测拿到热招职位(30-60K·14薪 等) |
+| 拉勾 | ⚠️ 需登录 | 滑块 + AJAX 双重拦截;CDP 通道代码就绪,登录后可用(本次未实测) |
+
+## CDP 登录浏览器模式(破 BOSS/拉勾风控)
+
+Firecrawl 免费档不能带 cookie,但本机可以:**启动一个独立 profile 的 Chrome,你手动登录一次,脚本通过 CDP 远程调试协议接管这个「真人浏览器」**——真指纹、活登录态,风控基本认。
+
+```bash
+# ① 启动受控 Chrome(独立 profile:~/.job-hunter/chrome-profile)
+python3 job_hunter.py setup-browser
+# ② 在弹出的窗口里登录 BOSS直聘(和拉勾),登录态会保留
+# ③ 之后 BOSS/拉勾渠道改走 CDP:
+python3 job_hunter.py hunt --company 商汤科技 --channels boss,lagou --cdp
+```
+
+实现要点与坑:
+
+- BOSS 有**反调试置空**:检测到自动化会在 2~5 秒内把页面跳成 `about:blank`。对策是从 navigation commit 起每 300ms 抢一次快照,命中职位标记即收(`cdp_grab_fast`)
+- BOSS 企业页只暴露**热招职位区**(全量列表需点击加载);「招聘职位(0)」会被识别为真零岗位,不会误报解析失败
+- 公司 → 企业页 URL 的解析走 Firecrawl search(BOSS 自家搜索页是 JS 壳,不好使)
+- 若本机有系统代理(Clash 等),localhost 连接必须显式绕过代理,否则 CDP 探测会误判为未连接
+- 合规提醒:登录态抓取违反平台服务条款,仅适合**本人账号、低频、自用**;高频调用有封号风险
 
 单家单渠道成本 ≈ 1 search + 1 scrape ≈ **4~5 额度**;免费档 1000/月 ≈ 每月巡检 200+ 家(official+liepin 双渠道约 100 家)。
 
